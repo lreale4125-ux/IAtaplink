@@ -1,0 +1,86 @@
+# ============================================
+# IAtaplink — NFC Smart Keychains
+# Configurazione produzione reale (Bambu Lab A1 Mini)
+# ============================================
+
+azienda:
+  nome: "IAtaplink — NFC Smart Keychains"
+  sede: "Cuneo"
+  regione: "Piemonte"
+  descrizione: >
+    Startup che produce portachiavi NFC smart personalizzabili.
+    Vendita singola (B2C) per ordini sotto 300 pezzi e vendita
+    B2B con trattativa per ordini da 300 pezzi in su.
+
+# ─── Modello di vendita ───
+vendita:
+  soglia_b2b: 300
+  margine_singolo_percentuale: 70
+  margine_b2b_percentuale: 35
+  scaglioni_b2b:
+    - da: 300
+      a: 499
+      sconto_percentuale: 20
+    - da: 500
+      a: 999
+      sconto_percentuale: 30
+    - da: 1000
+      a: 999999
+      sconto_percentuale: 40
+
+# ─── Costi unitari di produzione (EUR per pezzo) ───
+# NFC:         100 pezzi = €7.00  → €0.07/pz
+# Anelli:      100 pezzi = €2.67  → €0.027/pz
+# Elettricità: ~€0.01/pz
+# Filamento:   €14.94/kg refill (4-5 rotoli), ~50 pz/kg → €0.30/pz
+costi:
+  elettricita_per_stampa_eur: 0.01
+  filamento_per_pezzo_eur: 0.30
+  costo_nfc_singolo_eur: 0.07
+  costo_anello_ferro_eur: 0.027
+
+# ─── Listino filamento (Bambu Lab PLA) ───
+filamento:
+  pezzi_per_kg: 50
+  refill_senza_bobina:
+    - rotoli: "1-3"
+      prezzo_eur: 22.99
+      sconto: "listino"
+    - rotoli: "4-5"
+      prezzo_eur: 14.94
+      sconto: "-35%"
+    - rotoli: "6-9"
+      prezzo_eur: 12.64
+      sconto: "-45%"
+    - rotoli: "10+"
+      prezzo_eur: 11.50
+      sconto: "-50%"
+  con_bobina:
+    - rotoli: "1-3"
+      prezzo_eur: 25.99
+    - rotoli: "4-5"
+      prezzo_eur: 17.99
+    - rotoli: "6-9"
+      prezzo_eur: 16.99
+    - rotoli: "10+"
+      prezzo_eur: 12.99
+
+# ─── Magazzino (quantità attuali) ───
+magazzino:
+  nfc_disponibili: 500
+  filamento_kg: 2.5
+  anelli_ferro: 300
+  pezzi_per_kg_filamento: 50
+
+# ─── Produzione (Bambu Lab A1 Mini) ───
+produzione:
+  stampante: "Bambu Lab A1 Mini"
+  capacita_batch_stampante: 14
+  tempo_stampa_batch_ore: 11
+
+# ─── Ammortamento nuova stampante ───
+ammortamento:
+  costo_stampante_nuova_eur: 800
+  target_vendite_ammortamento: 1600
+  costo_unitario_attuale_eur: 0.50
+  costo_unitario_obiettivo_eur: 0.28

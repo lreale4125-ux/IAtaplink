@@ -1,14 +1,9 @@
 """
-4 task sequenziali del sistema NFC Smart Keychains.
+Task del sistema NFC Smart Keychains — suddivise per comando Telegram.
 
-L'approvazione, l'invio email e il salvataggio CRM sono gestiti
-dal bot Telegram (bot.py), non da task CrewAI.
-
-Flusso CrewAI:
-  1. Ricerca lead B2C + B2B (L'Esploratore)
-  2. Analisi produzione + listino (L'Analista)
-  3. Stesura messaggi personalizzati (Il Venditore)
-  4. Ricerca innovazione (L'Innovatore)
+  /cerca   → task_cerca:   ricerca lead + analisi + stesura email
+  /analisi → task_analisi: solo analisi produzione + listino
+  /idee    → task_idee:    solo ricerca innovazione R&D
 """
 
 from crewai import Task
@@ -19,7 +14,7 @@ SOGLIA_B2B = 300
 
 
 # ═══════════════════════════════════════════════
-#  Task 1 — Ricerca Lead (B2C + B2B)
+#  Ricerca Lead (B2C + B2B)
 # ═══════════════════════════════════════════════
 
 ricerca_lead = Task(
@@ -47,7 +42,7 @@ ricerca_lead = Task(
 
 
 # ═══════════════════════════════════════════════
-#  Task 2 — Analisi Produzione + Pricing
+#  Analisi Produzione + Pricing
 # ═══════════════════════════════════════════════
 
 analisi_produzione = Task(
@@ -70,7 +65,7 @@ analisi_produzione = Task(
 
 
 # ═══════════════════════════════════════════════
-#  Task 3 — Stesura Messaggi (B2C + B2B)
+#  Stesura Messaggi (B2C + B2B)
 # ═══════════════════════════════════════════════
 
 stesura_email = Task(
@@ -106,7 +101,30 @@ stesura_email = Task(
 
 
 # ═══════════════════════════════════════════════
-#  Task 4 — Ricerca Innovazione (R&D)
+#  Analisi Produzione standalone (per /analisi)
+# ═══════════════════════════════════════════════
+
+analisi_standalone = Task(
+    description=(
+        "Leggi la configurazione usando il tool 'Leggi Configurazione Produzione'.\n"
+        "Riporta nel tuo output:\n"
+        "  1. Costo unitario totale (elettricità + filamento + NFC + anello)\n"
+        "  2. Pezzi producibili con il magazzino attuale\n"
+        "  3. Tempi di produzione (Bambu Lab A1 Mini: 14 pz / 11 ore)\n"
+        "  4. Listino prezzi: vendita singola (margine 70%) e scaglioni B2B\n"
+        "  5. Analisi ammortamento stampante nuova\n"
+        "  6. Collo di bottiglia e suggerimenti per scalare"
+    ),
+    expected_output=(
+        "Report strutturato con: costo unitario, pezzi producibili, "
+        "tempi, listino prezzi, ammortamento, suggerimenti."
+    ),
+    agent=l_analista,
+)
+
+
+# ═══════════════════════════════════════════════
+#  Ricerca Innovazione standalone (per /idee)
 # ═══════════════════════════════════════════════
 
 ricerca_innovazione = Task(
@@ -125,9 +143,7 @@ ricerca_innovazione = Task(
 )
 
 
-tutte_le_task = [
-    ricerca_lead,
-    analisi_produzione,
-    stesura_email,
-    ricerca_innovazione,
-]
+# Gruppi di task per ogni comando
+task_cerca = [ricerca_lead, analisi_produzione, stesura_email]
+task_analisi = [analisi_standalone]
+task_idee = [ricerca_innovazione]

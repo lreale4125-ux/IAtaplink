@@ -2,10 +2,12 @@
 Bot Telegram per IAtaplink — NFC Smart Keychains.
 
 Controlla l'intero sistema multi-agente da Telegram:
-  /cerca  → avvia ricerca prospect, presenta uno alla volta, approva/rifiuta
-  /rd     → deep research: analisi approfondita mercato NFC con Gemini 2.5 Pro
-  /stats  → statistiche CRM
-  /help   → comandi disponibili
+  /cerca   → ricerca prospect + email, approva/rifiuta uno alla volta
+  /analisi → report produzione, costi, listino prezzi
+  /idee    → report R&D nuovi prodotti NFC
+  /rd      → deep research mercato NFC con Gemini 2.5 Pro
+  /stats   → statistiche CRM
+  /help    → comandi disponibili
 
 Dopo l'approvazione di un prospect B2B, l'email viene inviata automaticamente.
 Tutti i prospect vengono salvati nel CRM (SQLite).
@@ -52,8 +54,10 @@ class NfcBot:
         self.invia(
             "🤖 IAtaplink — NFC Smart Keychains Bot attivo!\n\n"
             "Comandi:\n"
-            "  /cerca — Avvia ricerca prospect (4 agenti AI)\n"
-            "  /rd — Deep Research mercato NFC (Gemini 2.5 Pro)\n"
+            "  /cerca — Ricerca prospect + email\n"
+            "  /analisi — Report produzione e listino\n"
+            "  /idee — Nuovi prodotti NFC (R&D)\n"
+            "  /rd — Deep Research mercato NFC\n"
             "  /stats — Statistiche CRM\n"
             "  /help — Mostra comandi"
         )
@@ -76,6 +80,10 @@ class NfcBot:
         cmd = testo.strip().lower()
         if cmd in ("/cerca", "cerca", "/start"):
             self._processo_ricerca()
+        elif cmd in ("/analisi", "analisi"):
+            self._processo_analisi()
+        elif cmd in ("/idee", "idee"):
+            self._processo_idee()
         elif cmd in ("/rd", "rd", "/research", "research"):
             self._deep_research()
         elif cmd in ("/stats", "stats"):
@@ -96,18 +104,14 @@ class NfcBot:
         )
 
         try:
-            task_outputs = self._esegui_crew()
+            from tasks import task_cerca
+            task_outputs = self._esegui_crew(task_cerca)
         except Exception as e:
             self.invia(f"❌ Errore durante la ricerca:\n{e}")
             return
 
-        output_analisi = task_outputs[1] if len(task_outputs) > 1 else "N/A"
-        output_email = task_outputs[2] if len(task_outputs) > 2 else ""
         output_ricerca = task_outputs[0] if len(task_outputs) > 0 else ""
-        output_rd = task_outputs[3] if len(task_outputs) > 3 else "N/A"
-
-        self.invia(f"🏭 ANALISI PRODUZIONE\n\n{self._tronca(output_analisi)}")
-        self.invia(f"💡 REPORT R&D\n\n{self._tronca(output_rd)}")
+        output_email = task_outputs[2] if len(task_outputs) > 2 else ""
 
         prospects = self._parse_prospects(output_email, output_ricerca)
 
@@ -183,15 +187,15 @@ class NfcBot:
     #  Esecuzione CrewAI
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    def _esegui_crew(self) -> list[str]:
-        """Lancia la crew CrewAI e restituisce la lista degli output per task."""
+    def _esegui_crew(self, tasks: list) -> list[str]:
+        """Lancia la crew CrewAI con le task fornite e restituisce gli output."""
         from crewai import Crew, Process
-        from agents import l_esploratore, l_analista, il_venditore, l_innovatore
-        from tasks import tutte_le_task
+
+        agents = list({t.agent for t in tasks})
 
         crew = Crew(
-            agents=[l_esploratore, l_analista, il_venditore, l_innovatore],
-            tasks=tutte_le_task,
+            agents=agents,
+            tasks=tasks,
             process=Process.sequential,
             verbose=True,
         )
@@ -275,7 +279,7 @@ class NfcBot:
             import google.generativeai as genai
 
             genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-            model = genai.GenerativeModel("gemini-2.0-flash-lite")
+            model = genai.GenerativeModel("gemini-2.5-flash")
 
             prompt = (
                 "Analizza questi output e estrai TUTTI i prospect trovati in un array JSON.\n\n"
@@ -413,6 +417,62 @@ class NfcBot:
             )
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    #  Analisi Produzione (/analisi)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    def _processo_analisi(self):
+        self.invia(
+            "🏭 Avvio analisi produzione...\n"
+            "Calcolo costi, listino e ammortamento."
+        )
+
+        try:
+            from tasks import task_analisi
+            task_outputs = self._esegui_crew(task_analisi)
+        except Exception as e:
+            self.invia(f"❌ Errore durante l'analisi:\n{e}")
+            return
+
+        report = task_outputs[0] if task_outputs else "Nessun output."
+
+        self.invia("🏭 REPORT ANALISI PRODUZIONE\n" + "═" * 35)
+        parti = self._split_report(report, 3500)
+        for i, parte in enumerate(parti, 1):
+            if len(parti) > 1:
+                self.invia(f"[Parte {i}/{len(parti)}]\n\n{parte}")
+            else:
+                self.invia(parte)
+        self.invia("━━━ ANALISI COMPLETATA ━━━")
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    #  Ricerca Innovazione (/idee)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    def _processo_idee(self):
+        self.invia(
+            "💡 Avvio ricerca nuovi prodotti NFC...\n"
+            "Cerco idee, fornitori e costi."
+        )
+
+        try:
+            from tasks import task_idee
+            task_outputs = self._esegui_crew(task_idee)
+        except Exception as e:
+            self.invia(f"❌ Errore durante la ricerca idee:\n{e}")
+            return
+
+        report = task_outputs[0] if task_outputs else "Nessun output."
+
+        self.invia("💡 REPORT R&D — NUOVI PRODOTTI NFC\n" + "═" * 35)
+        parti = self._split_report(report, 3500)
+        for i, parte in enumerate(parti, 1):
+            if len(parti) > 1:
+                self.invia(f"[Parte {i}/{len(parti)}]\n\n{parte}")
+            else:
+                self.invia(parte)
+        self.invia("━━━ RICERCA IDEE COMPLETATA ━━━")
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  Deep Research (Gemini 2.5 Pro)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -536,8 +596,10 @@ class NfcBot:
         self.invia(
             "🤖 IAtaplink — NFC Smart Keychains Bot\n\n"
             "Comandi:\n"
-            "  /cerca — Avvia ricerca prospect B2C + B2B\n"
-            "  /rd — Deep Research: analisi approfondita mercato NFC\n"
+            "  /cerca — Ricerca prospect B2C + B2B\n"
+            "  /analisi — Report produzione, costi e listino\n"
+            "  /idee — Nuovi prodotti NFC (R&D)\n"
+            "  /rd — Deep Research mercato NFC\n"
             "  /stats — Statistiche CRM\n"
             "  /help — Questo messaggio\n\n"
             "Durante la revisione prospect:\n"

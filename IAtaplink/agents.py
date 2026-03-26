@@ -7,7 +7,7 @@ bot Telegram (bot.py), non da un agente CrewAI.
 Modelli Gemini assegnati per task:
   - Pro (2.5 Pro):        ricerca prospect + copywriting email   → massima qualità
   - Smart (2.5 Flash):    R&D e innovazione                     → buon rapporto
-  - Economico (2.0 FLite): calcoli semplici da config            → minimo costo
+  - Economico (2.5 Flash): calcoli semplici da config            → minimo costo
 """
 
 from crewai import Agent
@@ -21,7 +21,7 @@ SEDE = "Cuneo"
 REGIONE = "Piemonte"
 SOGLIA_B2B = 300
 
-LLM_ECONOMICO = "gemini/gemini-2.0-flash-lite"   # 4K RPM, Unlimited RPD — calcoli
+LLM_ECONOMICO = "gemini/gemini-2.5-flash"   # 4K RPM, Unlimited RPD — calcoli
 LLM_SMART = "gemini/gemini-2.5-flash"             # 1K RPM, 10K RPD — ricerca R&D
 LLM_PRO = "gemini/gemini-2.5-pro"                 # 150 RPM, 1K RPD — lead gen + copywriting
 

@@ -1,0 +1,4 @@
+crewai[tools]>=0.80.0
+pyyaml>=6.0
+requests>=2.31.0
+python-dotenv>=1.0.0

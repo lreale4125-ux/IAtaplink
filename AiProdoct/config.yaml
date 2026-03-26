@@ -1,0 +1,39 @@
+# ============================================
+# NFC Smart Keychains — Configurazione Business
+# Modifica i valori in base alla tua situazione
+# ============================================
+
+azienda:
+  nome: "NFC Smart Keychains"
+  sede: "Cuneo"
+  regione: "Piemonte"
+  descrizione: >
+    Startup B2B che produce portachiavi NFC smart personalizzabili
+    per aziende. Il portachiavi permette la condivisione digitale di
+    contatti, link e informazioni aziendali con un semplice tap.
+
+# ─── Costi unitari di produzione (EUR per pezzo) ───
+costi:
+  elettricita_per_stampa_eur: 0.03
+  filamento_per_pezzo_eur: 0.15
+  costo_nfc_singolo_eur: 0.35
+  costo_anello_ferro_eur: 0.05
+
+# ─── Magazzino (quantità attuali disponibili) ───
+magazzino:
+  nfc_disponibili: 500
+  filamento_kg: 2.5
+  anelli_ferro: 300
+  pezzi_per_kg_filamento: 50
+
+# ─── Produzione (stampante 3D attuale) ───
+produzione:
+  capacita_batch_stampante: 20
+  tempo_stampa_batch_ore: 4
+
+# ─── Ammortamento nuova stampante ───
+ammortamento:
+  costo_stampante_nuova_eur: 800
+  target_vendite_ammortamento: 1600
+  costo_unitario_attuale_eur: 0.50
+  costo_unitario_obiettivo_eur: 0.28

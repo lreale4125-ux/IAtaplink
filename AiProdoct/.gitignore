@@ -1,0 +1,38 @@
+# Segreti
+.env
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Ambienti virtuali
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+
+# Log
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CrewAI output
+output/

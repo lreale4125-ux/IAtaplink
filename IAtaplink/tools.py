@@ -1,5 +1,6 @@
 """
 Tool CrewAI per la lettura della configurazione di produzione.
+Output in formato TOON (Token-Oriented Object Notation) per massima efficienza token.
 """
 
 import math
@@ -7,6 +8,7 @@ import os
 
 import yaml
 from crewai.tools import tool
+from toon_format import encode as toon_encode
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
 
@@ -14,7 +16,8 @@ CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.y
 @tool("Leggi Configurazione Produzione")
 def leggi_configurazione(domanda: str) -> str:
     """
-    Legge il file config.yaml e restituisce tutti i dati di produzione:
+    Legge il file config.yaml e restituisce tutti i dati di produzione
+    in formato TOON (Token-Oriented Object Notation):
     costi unitari, scorte di magazzino, capacità produttiva (Bambu Lab A1 Mini),
     analisi ammortamento e listino prezzi (vendita singola + scaglioni B2B).
     """
@@ -58,46 +61,59 @@ def leggi_configurazione(domanda: str) -> str:
     soglia = vendita.get("soglia_b2b", 300)
     prezzo_singolo = round(costo_unitario / (1 - margine_singolo), 2)
 
-    scaglioni_txt = ""
+    scaglioni = []
     for s in vendita.get("scaglioni_b2b", []):
         sconto = s.get("sconto_percentuale", 0) / 100
         prezzo = round(prezzo_singolo * (1 - sconto), 2)
-        da, a = s.get("da", 0), s.get("a", 0)
-        a_label = f"{a}" if a < 99999 else "+"
-        scaglioni_txt += f"  {da}-{a_label} pz: €{prezzo}/pz (-{int(sconto*100)}%)\n"
+        scaglioni.append({
+            "da": s.get("da", 0),
+            "a": s.get("a", 0),
+            "sconto_pct": int(sconto * 100),
+            "prezzo_eur": prezzo,
+        })
 
-    fil_txt = ""
+    fil_listino = []
     for f in filamento.get("refill_senza_bobina", []):
-        fil_txt += f"  {f['rotoli']} rotoli: €{f['prezzo_eur']} ({f['sconto']})\n"
+        fil_listino.append({
+            "rotoli": f["rotoli"],
+            "prezzo_eur": f["prezzo_eur"],
+            "sconto": f["sconto"],
+        })
 
-    return (
-        f"═══ CONFIGURAZIONE PRODUZIONE ({prod.get('stampante','N/A')}) ═══\n\n"
-        "📦 COSTI UNITARI:\n"
-        f"  Elettricità:   €{costi.get('elettricita_per_stampa_eur', 0)}\n"
-        f"  Filamento:     €{costi.get('filamento_per_pezzo_eur', 0)}\n"
-        f"  NFC singolo:   €{costi.get('costo_nfc_singolo_eur', 0)} (100pz = €7.00)\n"
-        f"  Anello ferro:  €{costi.get('costo_anello_ferro_eur', 0)} (100pz = €2.67)\n"
-        f"  ➜ COSTO UNITARIO TOTALE: €{costo_unitario:.3f}\n\n"
-        "🏭 MAGAZZINO ATTUALE:\n"
-        f"  NFC disponibili:    {mag.get('nfc_disponibili', 0)}\n"
-        f"  Filamento:          {mag.get('filamento_kg', 0)} kg "
-        f"({int(pezzi_da_filamento)} pezzi)\n"
-        f"  Anelli ferro:       {mag.get('anelli_ferro', 0)}\n"
-        f"  ➜ PEZZI PRODUCIBILI ORA: {pezzi_producibili}\n\n"
-        "🖨️ PRODUZIONE:\n"
-        f"  Stampante:          {prod.get('stampante', 'N/A')}\n"
-        f"  Capacità batch:     {cap} pezzi\n"
-        f"  Tempo per batch:    {ore_batch} ore\n"
-        f"  Tempo per 100 pz:  ~{ore_per_100} ore ({batch_per_100} batch)\n\n"
-        "🧵 LISTINO FILAMENTO (refill senza bobina):\n"
-        f"{fil_txt}\n"
-        "📈 AMMORTAMENTO NUOVA STAMPANTE:\n"
-        f"  Costo stampante:           €{costo_stamp}\n"
-        f"  Vendite per ammortizzare:  {target} pezzi\n"
-        f"  Ammortamento per pezzo:    €{ammortamento_per_pezzo}\n\n"
-        f"💰 LISTINO PREZZI (soglia B2B: {soglia} pz):\n"
-        f"  VENDITA SINGOLA (1-{soglia-1} pz): €{prezzo_singolo}/pz "
-        f"(margine {int(margine_singolo*100)}%)\n"
-        f"  SCAGLIONI B2B (≥{soglia} pz):\n"
-        f"{scaglioni_txt}"
-    )
+    dati = {
+        "stampante": prod.get("stampante", "N/A"),
+        "costi_unitari_eur": {
+            "elettricita": costi.get("elettricita_per_stampa_eur", 0),
+            "filamento": costi.get("filamento_per_pezzo_eur", 0),
+            "nfc": costi.get("costo_nfc_singolo_eur", 0),
+            "anello_ferro": costi.get("costo_anello_ferro_eur", 0),
+            "totale": round(costo_unitario, 3),
+        },
+        "magazzino": {
+            "nfc_disponibili": mag.get("nfc_disponibili", 0),
+            "filamento_kg": mag.get("filamento_kg", 0),
+            "pezzi_da_filamento": int(pezzi_da_filamento),
+            "anelli_ferro": mag.get("anelli_ferro", 0),
+            "pezzi_producibili": pezzi_producibili,
+        },
+        "produzione": {
+            "capacita_batch": cap,
+            "ore_per_batch": ore_batch,
+            "batch_per_100pz": batch_per_100,
+            "ore_per_100pz": ore_per_100,
+        },
+        "filamento_listino": fil_listino,
+        "ammortamento": {
+            "costo_stampante_eur": costo_stamp,
+            "target_vendite": target,
+            "costo_per_pezzo_eur": ammortamento_per_pezzo,
+        },
+        "listino_prezzi": {
+            "soglia_b2b": soglia,
+            "singolo_prezzo_eur": prezzo_singolo,
+            "singolo_margine_pct": int(margine_singolo * 100),
+            "scaglioni_b2b": scaglioni,
+        },
+    }
+
+    return "DATI PRODUZIONE (formato TOON):\n\n" + toon_encode(dati)

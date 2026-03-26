@@ -173,6 +173,28 @@ def cerca_prospect(tipo: str | None = None, stato: str | None = None) -> list[di
     return rows
 
 
+def esporta_prospect() -> list[dict]:
+    """Esporta tutti i prospect con lo stato email dal DB."""
+    con = _conn()
+    con.row_factory = sqlite3.Row
+    c = con.cursor()
+    c.execute("""
+        SELECT
+            p.id, p.nome, p.tipo, p.settore,
+            p.sede_citta, p.sede_regione, p.contatto,
+            p.motivazione, p.stato, p.data_creazione,
+            m.oggetto AS email_oggetto,
+            m.stato AS email_stato,
+            m.data_invio AS email_data_invio
+        FROM prospect p
+        LEFT JOIN messaggio m ON m.prospect_id = p.id
+        ORDER BY p.data_creazione DESC
+    """)
+    rows = [dict(r) for r in c.fetchall()]
+    con.close()
+    return rows
+
+
 def statistiche() -> dict:
     """Restituisce statistiche aggregate del CRM."""
     con = _conn()

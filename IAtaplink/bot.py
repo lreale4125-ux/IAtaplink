@@ -6,6 +6,7 @@ Controlla l'intero sistema multi-agente da Telegram:
   /analisi → report produzione, costi, listino prezzi
   /idee    → report R&D nuovi prodotti NFC
   /rd      → deep research mercato NFC con Gemini 2.5 Pro
+  /export  → scarica file JSON con tutti i prospect e stato email
   /stats   → statistiche CRM
   /help    → comandi disponibili
 
@@ -58,6 +59,7 @@ class NfcBot:
             "  /analisi — Report produzione e listino\n"
             "  /idee — Nuovi prodotti NFC (R&D)\n"
             "  /rd — Deep Research mercato NFC\n"
+            "  /export — Scarica file prospect\n"
             "  /stats — Statistiche CRM\n"
             "  /help — Mostra comandi"
         )
@@ -86,6 +88,8 @@ class NfcBot:
             self._processo_idee()
         elif cmd in ("/rd", "rd", "/research", "research"):
             self._deep_research()
+        elif cmd in ("/export", "export"):
+            self._esporta_prospect()
         elif cmd in ("/stats", "stats"):
             self._mostra_stats()
         elif cmd in ("/help", "help", "?"):
@@ -217,13 +221,42 @@ class NfcBot:
 
     def _parse_prospects(self, email_output: str, search_output: str) -> list[dict]:
         """
-        Prova prima il parsing con delimitatori, poi fallback con Gemini.
+        Parsing a cascata: TOON → delimitatori legacy → Gemini fallback.
         """
+        prospects = self._parse_toon(email_output)
+        if prospects:
+            return prospects
+
         prospects = self._parse_con_delimitatori(email_output)
         if prospects:
             return prospects
 
         return self._parse_con_gemini(email_output, search_output)
+
+    @staticmethod
+    def _parse_toon(testo: str) -> list[dict]:
+        """Parsing del formato TOON (prospects[N]{...}: ...)."""
+        try:
+            from toon_format import decode as toon_decode
+
+            if "prospects[" not in testo and "{" not in testo:
+                return []
+
+            match = re.search(
+                r"(prospects\[\d+\]\{[^}]+\}:.*?)(?:\n\n|\Z)",
+                testo,
+                re.DOTALL,
+            )
+            if not match:
+                return []
+
+            decoded = toon_decode(match.group(1))
+            prospects = decoded.get("prospects", []) if isinstance(decoded, dict) else decoded
+            if isinstance(prospects, list) and prospects:
+                return prospects
+        except Exception as e:
+            print(f"⚠️ Errore parsing TOON: {e}")
+        return []
 
     @staticmethod
     def _parse_con_delimitatori(testo: str) -> list[dict]:
@@ -274,33 +307,43 @@ class NfcBot:
         return prospects
 
     def _parse_con_gemini(self, email_output: str, search_output: str) -> list[dict]:
-        """Fallback: usa Gemini Flash Lite per estrarre i prospect in JSON."""
+        """Fallback: usa Gemini 2.5 Flash per estrarre i prospect via TOON."""
         try:
             import google.generativeai as genai
+            from toon_format import decode as toon_decode
 
             genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
             model = genai.GenerativeModel("gemini-2.5-flash")
 
             prompt = (
-                "Analizza questi output e estrai TUTTI i prospect trovati in un array JSON.\n\n"
+                "Analizza questi output e estrai TUTTI i prospect trovati.\n"
+                "Rispondi SOLO in formato TOON (Token-Oriented Object Notation).\n\n"
                 f"OUTPUT RICERCA:\n{search_output[:3000]}\n\n"
                 f"OUTPUT EMAIL:\n{email_output[:3000]}\n\n"
-                "Restituisci SOLO un array JSON (niente markdown, niente ```), con questa struttura:\n"
-                '[{"nome":"...","tipo":"B2C o B2B","settore":"...","sede_citta":"...",'
-                '"sede_regione":"...","contatto_email":"...","motivazione":"...",'
-                '"email_oggetto":"...","email_corpo":"testo completo"}]'
+                "Rispondi con ESATTAMENTE questo formato TOON (niente markdown, niente ```):\n\n"
+                "prospects[N]{nome,tipo,settore,sede_citta,sede_regione,contatto_email,motivazione,email_oggetto,email_corpo}:\n"
+                '  nome azienda,B2B,settore,citta,regione,email@example.com,motivazione,"oggetto email","corpo email completo"\n\n'
+                "Dove N è il numero di prospect trovati. Usa le virgolette per valori con virgole."
             )
 
             response = model.generate_content(prompt)
             testo = response.text.strip()
 
             if testo.startswith("```"):
-                testo = re.sub(r"^```(?:json)?\s*", "", testo)
+                testo = re.sub(r"^```(?:toon|json)?\s*", "", testo)
                 testo = re.sub(r"\s*```$", "", testo)
 
-            return json.loads(testo)
+            try:
+                decoded = toon_decode(testo)
+                prospects = decoded.get("prospects", decoded) if isinstance(decoded, dict) else decoded
+                if isinstance(prospects, list):
+                    return prospects
+            except Exception:
+                pass
+
+            return json.loads(testo) if testo.startswith("[") else []
         except Exception as e:
-            print(f"⚠️ Errore parsing Gemini: {e}")
+            print(f"⚠️ Errore parsing Gemini/TOON: {e}")
             return []
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -577,6 +620,50 @@ class NfcBot:
         return parti
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    #  Export prospect (/export)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    def _esporta_prospect(self):
+        from crm import esporta_prospect
+
+        rows = esporta_prospect()
+        if not rows:
+            self.invia("📂 Nessun prospect salvato nel CRM.")
+            return
+
+        b2b = [r for r in rows if r["tipo"] == "B2B"]
+        b2c = [r for r in rows if r["tipo"] == "B2C"]
+        inviate = sum(1 for r in rows if r.get("email_stato") == "inviato")
+
+        self.invia(
+            f"📂 Export CRM: {len(rows)} prospect\n"
+            f"  B2B: {len(b2b)} | B2C: {len(b2c)}\n"
+            f"  Email inviate: {inviate}\n\n"
+            "Genero il file..."
+        )
+
+        export_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "prospect_export.json"
+        )
+        with open(export_path, "w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False, indent=2)
+
+        self._invia_documento(export_path, f"prospect_export_{len(rows)}.json")
+
+    def _invia_documento(self, filepath: str, filename: str):
+        """Invia un file come documento su Telegram."""
+        try:
+            with open(filepath, "rb") as f:
+                requests.post(
+                    f"{self.base}/sendDocument",
+                    data={"chat_id": self.chat_id},
+                    files={"document": (filename, f, "application/json")},
+                    timeout=60,
+                )
+        except requests.RequestException as e:
+            self.invia(f"⚠️ Errore invio file: {e}")
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     #  Comandi info
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -600,6 +687,7 @@ class NfcBot:
             "  /analisi — Report produzione, costi e listino\n"
             "  /idee — Nuovi prodotti NFC (R&D)\n"
             "  /rd — Deep Research mercato NFC\n"
+            "  /export — Scarica file JSON con tutti i prospect\n"
             "  /stats — Statistiche CRM\n"
             "  /help — Questo messaggio\n\n"
             "Durante la revisione prospect:\n"

@@ -4,6 +4,7 @@ credentials.json
 
 # Database CRM
 crm.db
+prospect_export.json
 
 # Python
 __pycache__/
